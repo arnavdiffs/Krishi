@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+server/venv/
+*.db
+
+# Node
+client/node_modules/
+.npm
+.DS_Store
+
+# Logs
+*.log
