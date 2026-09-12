@@ -76,14 +76,16 @@ export default function PhoneMockup({ latestAlert, activePhoneDelivery }) {
               <div className="my-auto bg-amber-500/20 border border-amber-400/50 p-2 rounded animate-pulse-fast">
                 <div className="flex items-center justify-between text-amber-300 font-bold text-[10px] mb-1">
                   <span className="bg-red-600 text-white px-1 rounded animate-bounce">⚡ AMBER ALERT</span>
-                  <span>CLASS 0 SMS</span>
+                  <span className="text-[9px] text-amber-200">
+                    {currentDelivery.channel.includes('MANDI') ? 'TIER 2: CELL BROADCAST' : 'TIER 1: FLASH SMS'}
+                  </span>
                 </div>
                 <div className="text-[11px] font-sans font-semibold text-white leading-tight mb-2">
                   {currentDelivery.message}
                 </div>
-                <div className="text-[9px] text-[#9df28f] flex justify-between">
+                <div className="text-[9px] text-[#9df28f] flex justify-between border-t border-[#3e563d] pt-1">
                   <span>To: {currentDelivery.farmer_name}</span>
-                  <span>Crop: {currentDelivery.crop}</span>
+                  <span>Crop: {currentDelivery.crop} ({currentDelivery.crop_stage})</span>
                 </div>
               </div>
             ) : (

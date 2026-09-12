@@ -50,10 +50,11 @@ async def dispatch_fire_and_forget_alert(
     cursor.execute("SELECT * FROM farmers WHERE opt_in_status = 1")
     all_farmers = cursor.fetchall()
 
-    eligible_farmers = []
+    farmers_in_zone = []
+    deliveries_to_record = []
     high_risk_count = 0
     mod_risk_count = 0
-    deliveries_to_record = []
+    suppressed_count = 0
 
     for f in all_farmers:
         # Check geographic distance from center
@@ -61,27 +62,51 @@ async def dispatch_fire_and_forget_alert(
         if not within:
             continue
 
-        # Check crop sensitivity
+        farmers_in_zone.append(f)
+
+        # Check crop sensitivity & growth stage
         risk, should_alert = evaluate_crop_risk(f["crop"], f["crop_stage"], rain_intensity_mm)
         
-        if should_alert:
-            if risk == "CRITICAL":
-                high_risk_count += 1
-            else:
-                mod_risk_count += 1
+        if not should_alert:
+            # Crop is safe (e.g. vegetative paddy) -> Suppress to kill alert fatigue!
+            suppressed_count += 1
+            continue
 
-            # Generate alert message in farmer's preferred language
-            msg = generate_alert_message(
-                farmer_name=f["name"],
-                crop=f["crop"],
-                crop_stage=f["crop_stage"],
-                risk=risk,
-                language=f["language"]
-            )
+        if risk == "CRITICAL":
+            high_risk_count += 1
+        else:
+            mod_risk_count += 1
 
-            # Fire-and-forget: we simulate sending both FLASH SMS (Class 0) and IVR Call
-            # Primary channel: Class 0 Flash SMS
-            delivery_item = {
+        # Generate alert message in farmer's preferred language
+        msg = generate_alert_message(
+            farmer_name=f["name"],
+            crop=f["crop"],
+            crop_stage=f["crop_stage"],
+            risk=risk,
+            language=f["language"]
+        )
+
+        # TIER 1: Targeted Class 0 Flash SMS (bypasses inbox, full screen emergency alert)
+        delivery_item = {
+            "farmer_id": f["id"],
+            "farmer_name": f["name"],
+            "phone": f["phone"],
+            "village": f["village"],
+            "crop": f["crop"],
+            "crop_stage": f["crop_stage"],
+            "language": f["language"],
+            "channel": "TIER_1_FLASH_SMS_CLASS_0",
+            "message": msg,
+            "urgency": risk,
+            "distance_km": dist_km,
+            "status": "DELIVERED_INSTANT",
+            "delivered_at": now_str
+        }
+        deliveries_to_record.append(delivery_item)
+
+        # TIER 1 Fallback: Automated Vernacular Voice Call (IVR) for Critical Stage or Illiterate Farmers
+        if risk == "CRITICAL":
+            voice_item = {
                 "farmer_id": f["id"],
                 "farmer_name": f["name"],
                 "phone": f["phone"],
@@ -89,40 +114,36 @@ async def dispatch_fire_and_forget_alert(
                 "crop": f["crop"],
                 "crop_stage": f["crop_stage"],
                 "language": f["language"],
-                "channel": "FLASH_SMS_CLASS_0",
-                "message": msg,
-                "urgency": risk,
+                "channel": "TIER_1_VOICE_CALL_IVR",
+                "message": f"कृषि आपातकालीन वॉयस कॉल: {msg}",
+                "urgency": "CRITICAL",
                 "distance_km": dist_km,
-                "status": "DELIVERED_INSTANT",
+                "status": "QUEUED_RINGING",
                 "delivered_at": now_str
             }
-            deliveries_to_record.append(delivery_item)
+            deliveries_to_record.append(voice_item)
 
-            # Secondary voice channel for critical crop damage risk
-            if risk == "CRITICAL":
-                voice_item = {
-                    "farmer_id": f["id"],
-                    "farmer_name": f["name"],
-                    "phone": f["phone"],
-                    "village": f["village"],
-                    "crop": f["crop"],
-                    "crop_stage": f["crop_stage"],
-                    "language": f["language"],
-                    "channel": "VOICE_CALL_IVR",
-                    "message": f"कृषि आपातकालीन कॉल: {msg}",
-                    "urgency": "CRITICAL",
-                    "distance_km": dist_km,
-                    "status": "QUEUED_RINGING",
-                    "delivered_at": now_str
-                }
-                deliveries_to_record.append(voice_item)
+    # TIER 2: APMC Mandi Cell Broadcast (CB)
+    # If this tower covers an APMC Mandi yard and rain is severe/cloudburst (>= 30mm/hr), trigger network-level Cell Broadcast
+    is_mandi_tower = False
+    if tower_id:
+        cursor.execute("SELECT is_apmc_mandi FROM towers WHERE id = ?", (tower_id,))
+        m_row = cursor.fetchone()
+        if m_row and m_row["is_apmc_mandi"]:
+            is_mandi_tower = True
+
+    mandi_cb_active = is_mandi_tower and rain_intensity_mm >= 30.0
+
+    # Calculate suppression rate
+    zone_count = len(farmers_in_zone)
+    suppression_rate = round((suppressed_count / zone_count * 100), 1) if zone_count > 0 else 0.0
 
     # 2. Persist alert event in DB
-    desc = f"Rain Alert ({rain_intensity_mm} mm/h) - {notes} near {tower_name}"
+    desc = f"Rain Alert ({rain_intensity_mm} mm/h) near {tower_name} - {notes}"
     cursor.execute("""
     INSERT INTO alerts (tower_id, latitude, longitude, rain_intensity_mm, severity, description, total_farmers_evaluated, high_risk_farmers_alerted, moderate_risk_farmers_alerted, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (tower_id, center_lat, center_lon, rain_intensity_mm, severity, desc, len(all_farmers), high_risk_count, mod_risk_count, now_str))
+    """, (tower_id, center_lat, center_lon, rain_intensity_mm, severity, desc, zone_count, high_risk_count, mod_risk_count, now_str))
     
     alert_id = cursor.lastrowid
 
@@ -148,9 +169,12 @@ async def dispatch_fire_and_forget_alert(
         "rain_intensity_mm": rain_intensity_mm,
         "severity": severity,
         "description": desc,
-        "total_farmers_evaluated": len(all_farmers),
+        "total_farmers_evaluated": zone_count,
         "high_risk_farmers_alerted": high_risk_count,
         "moderate_risk_farmers_alerted": mod_risk_count,
+        "suppressed_safe_farmers": suppressed_count,
+        "suppression_rate_percent": suppression_rate,
+        "mandi_cell_broadcast_active": mandi_cb_active,
         "total_deliveries_sent": len(deliveries_to_record),
         "deliveries": deliveries_to_record
     }
@@ -160,7 +184,7 @@ async def dispatch_fire_and_forget_alert(
     LATEST_DISPATCH = {
         "active": True,
         "event": summary,
-        "alert_deliveries": deliveries_to_record[:20]
+        "alert_deliveries": deliveries_to_record[:25]
     }
 
     return summary

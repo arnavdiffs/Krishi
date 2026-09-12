@@ -25,6 +25,7 @@ def init_db():
         radius_km REAL DEFAULT 10.0,
         state TEXT NOT NULL,
         district TEXT NOT NULL,
+        is_apmc_mandi INTEGER DEFAULT 0,
         is_active INTEGER DEFAULT 1,
         created_at TEXT NOT NULL
     )
@@ -42,10 +43,24 @@ def init_db():
         crop TEXT NOT NULL,
         crop_stage TEXT NOT NULL,
         language TEXT DEFAULT 'hi',
+        agristack_id TEXT,
+        plot_survey_no TEXT,
         opt_in_status INTEGER DEFAULT 1,
         created_at TEXT NOT NULL
     )
     """)
+
+    # Safe column migrations if database already existed
+    try:
+        cursor.execute("ALTER TABLE towers ADD COLUMN is_apmc_mandi INTEGER DEFAULT 0")
+    except Exception:
+        pass
+
+    try:
+        cursor.execute("ALTER TABLE farmers ADD COLUMN agristack_id TEXT")
+        cursor.execute("ALTER TABLE farmers ADD COLUMN plot_survey_no TEXT")
+    except Exception:
+        pass
 
     # Alert Events table
     cursor.execute("""
@@ -97,15 +112,15 @@ def seed_data(conn):
 
     # Seed towers around agricultural hubs (Nashik/Maharashtra onion-grape-cotton belt & Punjab wheat belt)
     towers = [
-        ("Niphad Mandi Central Tower", "MH-NIPH-01", 20.0766, 74.1085, 10.0, "Maharashtra", "Nashik", now),
-        ("Lasalgaon APMC Market Tower", "MH-LASL-02", 20.1472, 74.2268, 10.0, "Maharashtra", "Nashik", now),
-        ("Yeola Agro & Cotton Tower", "MH-YEOL-03", 20.0433, 74.4891, 12.0, "Maharashtra", "Nashik", now),
-        ("Sinnar Horticulture Tower", "MH-SINN-04", 19.8458, 73.9961, 10.0, "Maharashtra", "Nashik", now),
-        ("Khanna Grain Terminal Tower", "PB-KHAN-05", 30.7068, 76.2197, 15.0, "Punjab", "Ludhiana", now)
+        ("Niphad Mandi Central Tower", "MH-NIPH-01", 20.0766, 74.1085, 10.0, "Maharashtra", "Nashik", 1, now),
+        ("Lasalgaon APMC Market Tower", "MH-LASL-02", 20.1472, 74.2268, 10.0, "Maharashtra", "Nashik", 1, now),
+        ("Yeola Agro & Cotton Tower", "MH-YEOL-03", 20.0433, 74.4891, 12.0, "Maharashtra", "Nashik", 0, now),
+        ("Sinnar Horticulture Tower", "MH-SINN-04", 19.8458, 73.9961, 10.0, "Maharashtra", "Nashik", 0, now),
+        ("Khanna Grain Terminal Tower", "PB-KHAN-05", 30.7068, 76.2197, 15.0, "Punjab", "Ludhiana", 1, now)
     ]
     cursor.executemany("""
-    INSERT INTO towers (name, code, latitude, longitude, radius_km, state, district, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO towers (name, code, latitude, longitude, radius_km, state, district, is_apmc_mandi, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, towers)
 
     # Seed farmers located within and slightly outside these tower radii

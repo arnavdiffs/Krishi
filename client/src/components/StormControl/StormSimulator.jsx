@@ -145,25 +145,47 @@ export default function StormSimulator({ towers, onTriggerAlert, isTriggering, l
 
       {/* Live Dispatch Output Summary */}
       {lastDispatchSummary && (
-        <div className="bg-slate-800/80 border border-amber-500/30 rounded-lg p-3 text-xs space-y-1.5 animate-fadeIn">
-          <div className="flex items-center justify-between font-semibold text-amber-400 border-b border-slate-700/60 pb-1">
-            <span className="flex items-center gap-1">
+        <div className="bg-slate-800/90 border border-amber-500/40 rounded-xl p-3.5 text-xs space-y-2.5 animate-fadeIn shadow-lg">
+          <div className="flex items-center justify-between font-semibold text-amber-400 border-b border-slate-700/80 pb-1.5">
+            <span className="flex items-center gap-1.5">
               <Activity className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-              Broadcast Dispatched!
+              <span>Broadcast Pipeline Dispatched</span>
             </span>
-            <span className="text-[10px] text-slate-400">{lastDispatchSummary.timestamp.slice(11, 19)}</span>
+            <span className="text-[10px] text-slate-400 font-mono">{lastDispatchSummary.timestamp.slice(11, 19)}</span>
           </div>
-          <p className="text-slate-300">
-            Tower: <strong className="text-white">{lastDispatchSummary.tower_name}</strong>
+
+          <p className="text-slate-300 flex justify-between">
+            <span>Tower: <strong className="text-white">{lastDispatchSummary.tower_name}</strong></span>
+            {lastDispatchSummary.mandi_cell_broadcast_active && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-600 text-white font-bold animate-pulse">
+                TIER 2: MANDI CB ACTIVE
+              </span>
+            )}
           </p>
-          <div className="grid grid-cols-2 gap-2 text-[11px] pt-1">
-            <div className="bg-red-500/10 border border-red-500/20 p-1.5 rounded">
-              <span className="text-red-400 block font-bold">🚨 {lastDispatchSummary.high_risk_farmers_alerted} Farmers</span>
-              <span className="text-slate-400 text-[10px]">High Risk (Flash SMS + Voice)</span>
+
+          {/* Key Metric: Noise Suppression */}
+          <div className="bg-emerald-950/40 border border-emerald-500/30 rounded-lg p-2 flex items-center justify-between">
+            <div>
+              <span className="text-emerald-400 font-bold block text-[11px]">
+                🛡️ {lastDispatchSummary.suppression_rate_percent}% False-Alarm Noise Suppressed
+              </span>
+              <span className="text-slate-400 text-[10px]">
+                {lastDispatchSummary.suppressed_safe_farmers} safe-crop farmers skipped (anti-fatigue)
+              </span>
             </div>
-            <div className="bg-blue-500/10 border border-blue-500/20 p-1.5 rounded">
-              <span className="text-blue-400 block font-bold">🛡️ {lastDispatchSummary.total_deliveries_sent} Deliveries</span>
-              <span className="text-slate-400 text-[10px]">Zero Farmer Cost</span>
+            <span className="text-emerald-300 font-mono font-bold text-xs bg-emerald-500/20 px-2 py-0.5 rounded">
+              Gated
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 text-[11px]">
+            <div className="bg-red-500/10 border border-red-500/20 p-2 rounded-lg">
+              <span className="text-red-400 block font-bold">🚨 {lastDispatchSummary.high_risk_farmers_alerted} Farmers</span>
+              <span className="text-slate-400 text-[10px]">Tier 1: Flash SMS + Voice IVR</span>
+            </div>
+            <div className="bg-blue-500/10 border border-blue-500/20 p-2 rounded-lg">
+              <span className="text-blue-400 block font-bold">📡 {lastDispatchSummary.total_deliveries_sent} Deliveries</span>
+              <span className="text-slate-400 text-[10px]">AgriStack Synced</span>
             </div>
           </div>
         </div>

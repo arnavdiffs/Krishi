@@ -79,6 +79,7 @@ def list_towers():
             "radius_km": r["radius_km"],
             "state": r["state"],
             "district": r["district"],
+            "is_apmc_mandi": bool(r["is_apmc_mandi"]) if "is_apmc_mandi" in r.keys() else False,
             "is_active": bool(r["is_active"]),
             "covered_farmers_count": covered_cnt,
             "created_at": r["created_at"]
@@ -93,9 +94,9 @@ def create_tower(tower: TowerCreate):
     now_str = datetime.now().isoformat()
     try:
         cursor.execute("""
-        INSERT INTO towers (name, code, latitude, longitude, radius_km, state, district, is_active, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (tower.name, tower.code, tower.latitude, tower.longitude, tower.radius_km, tower.state, tower.district, int(tower.is_active), now_str))
+        INSERT INTO towers (name, code, latitude, longitude, radius_km, state, district, is_apmc_mandi, is_active, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (tower.name, tower.code, tower.latitude, tower.longitude, tower.radius_km, tower.state, tower.district, int(tower.is_apmc_mandi), int(tower.is_active), now_str))
         conn.commit()
         new_id = cursor.lastrowid
     except Exception as e:
@@ -136,6 +137,8 @@ def list_farmers():
             "crop": r["crop"],
             "crop_stage": r["crop_stage"],
             "language": r["language"],
+            "agristack_id": r["agristack_id"] if "agristack_id" in r.keys() else None,
+            "plot_survey_no": r["plot_survey_no"] if "plot_survey_no" in r.keys() else None,
             "opt_in_status": bool(r["opt_in_status"]),
             "nearest_tower": nearest_tower,
             "distance_to_nearest_tower_km": min_dist if nearest_tower else None,
